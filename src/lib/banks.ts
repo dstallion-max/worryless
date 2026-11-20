@@ -1,0 +1,20 @@
+/** Common Nigerian banks with their CBN codes (what payout APIs expect). */
+export const BANKS: { name: string; code: string }[] = [
+  { name: "Access Bank", code: "044" },
+  { name: "Ecobank", code: "050" },
+  { name: "Fidelity Bank", code: "070" },
+  { name: "First Bank", code: "011" },
+  { name: "FCMB", code: "214" },
+  { name: "GTBank", code: "058" },
+  { name: "Kuda Bank", code: "090267" },
+  { name: "Moniepoint", code: "50515" },
+  { name: "OPay", code: "100004" },
+  { name: "PalmPay", code: "100033" },
+  { name: "Polaris Bank", code: "076" },
+  { name: "Stanbic IBTC", code: "221" },
+  { name: "Sterling Bank", code: "232" },
+  { name: "UBA", code: "033" },
+  { name: "Union Bank", code: "032" },
+  { name: "Wema Bank", code: "035" },
+  { name: "Zenith Bank", code: "057" },
+];

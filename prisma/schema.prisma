@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  FROZEN
+}
+
+enum EnvelopeType {
+  FREE
+  LOCKED
+  EMERGENCY
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum RecipientType {
+  AIRTIME
+  BANK
+  INTERNAL // moves the money back to the user's own available balance
+}
+
+enum ScheduleStatus {
+  ACTIVE
+  PAUSED
+  FAILED
+}
+
+enum ReleaseKind {
+  SCHEDULED
+  EARLY
+}
+
+enum FundingStatus {
+  PENDING
+  SUCCESS
+}
+
+enum GroupRole {
+  ADMIN
+  MEMBER
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id              String     @id @default(uuid())
+  authId          String     @unique // = auth.users.id in Supabase
+  email           String     @unique
+  name            String?
+  lastActiveAt    DateTime   @default(now())
+  status          UserStatus @default(ACTIVE)
+  disciplineScore Int        @default(0)
+  createdAt       DateTime   @default(now())
+
+  envelopes     Envelope[]
+  heartbeats    HeartbeatLog[]
+  memberships   GroupMember[]
+  contributions Contribution[]
+  notifications Notification[]
+  groupsCreated Group[]
+  fundings      WalletFunding[]
+}
+
+model Envelope {
+  id               String       @id @default(uuid())
+  userId           String
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  balanceKobo      Int          @default(0) // Int max is about N21.4M; switch to BigInt if you need more
+  type             EnvelopeType @default(LOCKED)
+  unlockDelayHours Int          @default(0)
+  lockedUntil      DateTime?
+  createdAt        DateTime     @default(now())
+
+  schedules Schedule[]
+  releases  Release[]
+
+  @@index([userId])
+}
+
+model Schedule {
+  id            String         @id @default(uuid())
+  envelopeId    String
+  envelope      Envelope       @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  amountKobo    Int
+  frequency     Frequency
+  nextRunAt     DateTime
+  recipientType RecipientType
+  recipientRef  String // phone number, account number, or "wallet" for INTERNAL
+  bankName      String?
+  bankCode      String?
+  accountName   String?
+  status        ScheduleStatus @default(ACTIVE) // replaces the "active" boolean so we can also record FAILED
+  lastError     String?
+
+  @@index([status, nextRunAt])
+  @@index([envelopeId])
+}
+
+model Release {
+  id         String      @id @default(uuid())
+  envelopeId String
+  envelope   Envelope    @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  amountKobo Int
+  kind       ReleaseKind
+  note       String?
+  createdAt  DateTime    @default(now())
+
+  @@index([envelopeId])
+}
+
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  rulesJson   Json // { requiredApprovals: number, label: string }
+  balanceKobo Int      @default(0)
+  createdBy   String
+  creator     User     @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime @default(now())
+
+  members       GroupMember[]
+  approvals     Approval[]
+  contributions Contribution[]
+}
+
+model GroupMember {
+  groupId String
+  userId  String
+  group   Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role    GroupRole @default(MEMBER)
+
+  @@id([groupId, userId])
+}
+
+model Approval {
+  id                String         @id @default(uuid())
+  groupId           String
+  group             Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  amountKobo        Int
+  purpose           String
+  status            ApprovalStatus @default(PENDING)
+  requiredApprovals Int            @default(2)
+  approvalsJson     Json           @default("[]") // [{ userId, vote: "APPROVE" | "REJECT" }]
+  createdBy         String
+  createdAt         DateTime       @default(now())
+
+  @@index([groupId, status])
+}
+
+model Contribution {
+  id         String   @id @default(uuid())
+  groupId    String
+  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amountKobo Int
+  createdAt  DateTime @default(now())
+
+  @@index([groupId])
+}
+
+model HeartbeatLog {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  confirmedAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// One row per Interswitch checkout. txnRef is unique so a payment can only ever be credited once.
+model WalletFunding {
+  id         String        @id @default(uuid())
+  userId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  txnRef     String        @unique
+  amountKobo Int
+  status     FundingStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  verifiedAt DateTime?
+
+  @@index([userId])
+}
