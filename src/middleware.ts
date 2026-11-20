@@ -1,3 +1,4 @@
+
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -12,13 +13,25 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(list) {
-          list.forEach(({ name, value }) => request.cookies.set(name, value));
+        setAll(
+          list: {
+            name: string;
+            value: string;
+            options: any;
+          }[]
+        ) {
+          list.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          );
+
           response = NextResponse.next({ request });
-          list.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+
+          list.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
         },
       },
-    },
+    }
   );
 
   const {
@@ -26,16 +39,27 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isCron = path.startsWith("/api/cron"); // protected by CRON_SECRET instead
-  // Screens a signed-out person may open. /reset-password is not here: it needs the recovery session.
+  const isCron = path.startsWith("/api/cron");
+
   const PUBLIC = ["/login", "/register", "/forgot-password", "/auth"];
-  const isPublic = PUBLIC.some((p) => path === p || path.startsWith(p + "/"));
-  const isAuthScreen = ["/login", "/register", "/forgot-password"].includes(path);
+  const isPublic = PUBLIC.some(
+    (p) => path === p || path.startsWith(p + "/")
+  );
+
+  const isAuthScreen = [
+    "/login",
+    "/register",
+    "/forgot-password",
+  ].includes(path);
 
   if (!user && !isCron && !isPublic) {
     if (path.startsWith("/api")) {
-      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Not signed in" },
+        { status: 401 }
+      );
     }
+
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
